@@ -1,0 +1,8 @@
+
+# ignore output data and log messages
+logs/
+output/
+
+# ignore created batch scripts
+Metacentrum/*.pbs
+KOIOS/*sbatch.sh
