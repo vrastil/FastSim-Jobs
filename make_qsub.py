@@ -231,8 +231,9 @@ def make_sbatch_koios(job):
             job.wall_time_h, job.wall_time_m)
     sbatch += "#SBATCH --job-name=%s_fastsim\n" % job.app
     sbatch += "#SBATCH --output=%s/logs/%%x_%%j.log\n" % MYDIR
-    sbatch += "#SBATCH --error=%s/logs/%%x_%%j_err.log\n" % MYDIR
+    sbatch += "#SBATCH --error=%s/logs/%%x_%%j.log\n" % MYDIR
     sbatch += "#SBATCH --partition=long\n"
+    sbatch += "#SBATCH --exclusive\n"
     ##############
     # RUN SCRIPT #
     ##############
