@@ -1,8 +1,11 @@
 #!/usr/bin/env python
-import math
-import os
-import stat
 
+# python 3 compatibility
+from __future__ import print_function
+from builtins import input
+
+# other modules
+import math
 
 class Job_Param(object):
     def __init__(self, app, mem, cpus, n_cpus):
@@ -84,20 +87,20 @@ def memory_chi(sim_param):
     return mem / float(1024 * 1024 * 1024)  # convert to GB
 
 def get_input():
-    Nm = input("Enter number of potential mesh points per dimenson: ")
-    NM = input("Enter number of analysis mesh points per dimenson: ")
-    Np = input("Enter number of particles per dimenson: ")
-    box = input("Enter size of the simulation box: ")
-    z = input("Enter initial redshift of the simulation: ")
-    z0 = input("Enter final redshift of the simulation: ")
-    da = input("Enter value of time-step: ")
-    print_every = input("Enter how often there will be printing: ")
+    Nm = int(input("Enter number of potential mesh points per dimenson: "))
+    NM = int(input("Enter number of analysis mesh points per dimenson: "))
+    Np = int(input("Enter number of particles per dimenson: "))
+    box = float(input("Enter size of the simulation box: "))
+    z = float(input("Enter initial redshift of the simulation: "))
+    z0 = float(input("Enter final redshift of the simulation: "))
+    da = float(input("Enter value of time-step: "))
+    print_every = int(input("Enter how often there will be printing: "))
 
     sim_param = Sim_Param(Nm, NM, Np, box, z, z0, da, print_every)
-    sim_param.rs = input("Enter value of short-range cutof (FP_pp): ")
-    sim_param.mlt_runs = input("Enter number of runs: ")
-    sim_param.chi_phi = input("Enter value of screening potential (CHI): ")
-    sim_param.chi_n = input("Enter value chameleon power-law potential exponent (CHI): ")
+    sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
+    sim_param.mlt_runs = int(input("Enter number of runs: "))
+    sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
+    sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
     return sim_param
 
 
@@ -129,8 +132,8 @@ def cpu_chi(sim_param, prep_Nm, prep_Np, integ_np_nsteps, print_np, print_NM, in
     return cpus
 
 def convert_s2hms(seconds):
-    h = int(seconds) / (60 * 60)
-    m = (int(seconds) / 60) % 60
+    h = int(seconds) // (60 * 60)
+    m = (int(seconds) // 60) % 60
     s = int(seconds) % 60
     return h, m, s
 
@@ -157,13 +160,13 @@ def print_n_cpus_t(cpus, n_cpus):
     eff_n_cpu = get_eff_n_cpus(n_cpus)
     h, m, s = convert_s2hms(cpus / eff_n_cpu)
     time = time_2string(h, m, s)
-    print "\tOn %i cores the simulation will take %s of Wall time." % (n_cpus, time)
+    print("\tOn %i cores the simulation will take %s of Wall time." % (n_cpus, time))
 
 
 def get_n_cpus(cpus, mem, approx_str):
     h, m, s = convert_s2hms(cpus)
     time = time_2string(h, m, s)
-    print "\n%s will need approximately %.1f GB of memory and shouldn`t take more than %s of CPU time." % (approx_str, mem, time)
+    print("\n%s will need approximately %.1f GB of memory and shouldn`t take more than %s of CPU time." % (approx_str, mem, time))
 
     print_n_cpus_t(cpus, 4)
     if h > 1:
@@ -174,7 +177,7 @@ def get_n_cpus(cpus, mem, approx_str):
         print_n_cpus_t(cpus, 32)
         print_n_cpus_t(cpus, 64)
     
-    return input("Enter number of cores: ")
+    return int(input("Enter number of cores: "))
 
 
 def get_safe_mem_wall_time(mem, cpus, n_cpus):
@@ -238,9 +241,9 @@ def make_sbatch_koios(job):
     # RUN SCRIPT #
     ##############
     sbatch += "export OMP_NUM_THREADS=32\n"
-    sbatch += "module load singularity\n"
+    sbatch += "module add singularity/2.5.1\n"
     sbatch += "cd %s/../FastSim-Container/debian/\n" % MYDIR
-    sbatch += "singularity exec -B %s:/data fastsim.simg fastsim -c /data/input/generic_input.cfg %s --out_dir=/data/output/\n" % (MYDIR, job.sim_opt)
+    sbatch += "singularity exec -B %s:/data fastsim.simg FastSim -c /data/input/generic_input.cfg %s --out_dir=/data/output/\n" % (MYDIR, job.sim_opt)
     return sbatch
 
 def save_job_file(job_script, job_file):
