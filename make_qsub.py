@@ -241,7 +241,7 @@ def make_sbatch_koios(job):
     # RUN SCRIPT #
     ##############
     sbatch += "export OMP_NUM_THREADS=32\n"
-    sbatch += "module add singularity/2.5.1\n"
+    sbatch += "module add singularity/2.6.1\n"
     sbatch += "cd %s/../FastSim-Container/debian/\n" % MYDIR
     sbatch += "singularity exec -B %s:/data fastsim.simg FastSim -c /data/input/generic_input.cfg %s --out_dir=/data/output/\n" % (MYDIR, job.sim_opt)
     return sbatch
