@@ -30,6 +30,7 @@ class Job_Param(object):
         self.add_sim_opt("--time_step %f " % sim_param.da)
         self.add_sim_opt("--print_every %i " % sim_param.print_every)
         self.add_sim_opt("--mlt_runs %i " % sim_param.mlt_runs)
+        self.add_sim_opt("--pair %i " % sim_param.pair)
 
 
 class Sim_Param(object):
@@ -50,6 +51,7 @@ class Sim_Param(object):
             math.ceil(self.n_steps / float(print_every))) + 1 if print_every else 0
         self.rs = 0
         self.mlt_runs = 1
+        self.pair = 0
         self.chi_phi = 0
         self.chi_n = 0
 
@@ -99,6 +101,7 @@ def get_input():
     sim_param = Sim_Param(Nm, NM, Np, box, z, z0, da, print_every)
     sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
     sim_param.mlt_runs = int(input("Enter number of runs: "))
+    sim_param.pair = int(input("Run pair of simulations? "))
     sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
     sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
     return sim_param
@@ -293,10 +296,18 @@ PREP_PAR = 0.4
 PRINT_PAR = 3.0
 PRINT_NM = 1.7
 
+def paired_sim(sim_param):
+    if sim_param.pair == 0:
+        return 1
+    else:
+        return 2
+
+def cpu_mlt(sim_param):
+    return paired_sim(sim_param) * sim_param.mlt_runs
 
 def qsub_ZA(sim_param):
     cpu_param = 2.0, PREP_PAR, 0.25, PRINT_PAR, PRINT_NM
-    cpus = sim_param.mlt_runs * cpu_base(sim_param, *cpu_param)
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
     n_cpus = get_n_cpus(cpus, mem, "Zel`dovich approximation")
     ZA = Job_Param('ZA', mem, cpus, n_cpus)
@@ -309,7 +320,7 @@ def qsub_ZA(sim_param):
 
 def qsub_FF(sim_param):
     cpu_param = 1.7, PREP_PAR, 2.0, PRINT_PAR, PRINT_NM
-    cpus = sim_param.mlt_runs * cpu_base(sim_param, *cpu_param)
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
     n_cpus = get_n_cpus(cpus, mem, "Frozen-flow approximation")
     FF = Job_Param('FF', mem, cpus, n_cpus)
@@ -322,7 +333,7 @@ def qsub_FF(sim_param):
 
 def qsub_FP(sim_param):
     cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM
-    cpus = sim_param.mlt_runs * cpu_base(sim_param, *cpu_param)
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
     n_cpus = get_n_cpus(cpus, mem, "Frozen-potential approximation")
     FP = Job_Param('FP', mem, cpus, n_cpus)
@@ -335,7 +346,7 @@ def qsub_FP(sim_param):
 
 def qsub_FP_pp(sim_param):
     cpu_param = 16.0, PREP_PAR, 44.0, PRINT_PAR, PRINT_NM, 0
-    cpus = sim_param.mlt_runs * cpu_pp(sim_param, *cpu_param)
+    cpus = cpu_mlt(sim_param) * cpu_pp(sim_param, *cpu_param)
     mem = memory_fp_pp(sim_param)
     n_cpus = get_n_cpus(
         cpus, mem, "Frozen-potential particle-particle approximation")
@@ -351,7 +362,7 @@ def qsub_FP_pp(sim_param):
 
 def qsub_CHI(sim_param):
     cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM, 120
-    cpus = sim_param.mlt_runs * cpu_chi(sim_param, *cpu_param)
+    cpus = cpu_mlt(sim_param) * cpu_chi(sim_param, *cpu_param)
     mem = memory_chi(sim_param)
     n_cpus = get_n_cpus(cpus, mem, "Chameleon gravity approximation")
     CHI = Job_Param('CHI', mem, cpus, n_cpus)
