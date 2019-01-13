@@ -2,7 +2,10 @@
 
 # python 3 compatibility
 from __future__ import print_function
-from builtins import input
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 
 # other modules
 import math
@@ -15,22 +18,27 @@ class Job_Param(object):
         self.n_cpus = n_cpus
         self.wall_time_h = h
         self.wall_time_m = m
-        self.sim_opt = ""
+        self.sim_opt = {
+                        "app" : "",
+                        "size" : "",
+                        "redshift" : "",
+                        "mlt" : ""
+                        }
 
-    def add_sim_opt(self, sim_opt):
-        self.sim_opt += sim_opt
+    def add_sim_opt(self, sim_opt, key):
+        self.sim_opt[key] += sim_opt
 
     def add_std_opt(self, sim_param):
-        self.add_sim_opt("--mesh_num %i " % sim_param.Nm)
-        self.add_sim_opt("--mesh_num_pwr %i " % sim_param.NM)
-        self.add_sim_opt("--par_num %i " % sim_param.Np)
-        self.add_sim_opt("--box_size %f " % sim_param.box)
-        self.add_sim_opt("--redshift %f " % sim_param.z)
-        self.add_sim_opt("--redshift_0 %f " % sim_param.z0)
-        self.add_sim_opt("--time_step %f " % sim_param.da)
-        self.add_sim_opt("--print_every %i " % sim_param.print_every)
-        self.add_sim_opt("--mlt_runs %i " % sim_param.mlt_runs)
-        self.add_sim_opt("--pair %i " % sim_param.pair)
+        self.add_sim_opt("--mesh_num %i " % sim_param.Nm, "size")
+        self.add_sim_opt("--mesh_num_pwr %i " % sim_param.NM, "size")
+        self.add_sim_opt("--par_num %i " % sim_param.Np, "size")
+        self.add_sim_opt("--box_size %f " % sim_param.box, "size")
+        self.add_sim_opt("--redshift %f " % sim_param.z, "redshift")
+        self.add_sim_opt("--redshift_0 %f " % sim_param.z0, "redshift")
+        self.add_sim_opt("--time_step %f " % sim_param.da, "redshift")
+        self.add_sim_opt("--print_every %i " % sim_param.print_every, "redshift")
+        self.add_sim_opt("--mlt_runs %i " % sim_param.mlt_runs, "mlt")
+        self.add_sim_opt("--pair %i " % sim_param.pair, "mlt")
 
 
 class Sim_Param(object):
@@ -54,6 +62,7 @@ class Sim_Param(object):
         self.pair = 0
         self.chi_phi = 0
         self.chi_n = 0
+        self.comp_chi_lin = 0
 
 
 def memory_base(sim_param):
@@ -99,11 +108,12 @@ def get_input():
     print_every = int(input("Enter how often there will be printing: "))
 
     sim_param = Sim_Param(Nm, NM, Np, box, z, z0, da, print_every)
-    sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
+    # sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
     sim_param.mlt_runs = int(input("Enter number of runs: "))
     sim_param.pair = int(input("Run pair of simulations? "))
     sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
     sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
+    sim_param.comp_chi_lin = int(input("Run linear solver of chameleon? "))
     return sim_param
 
 
@@ -243,10 +253,18 @@ def make_sbatch_koios(job):
     ##############
     # RUN SCRIPT #
     ##############
+    sbatch += "\n# preparation\n"
     sbatch += "export OMP_NUM_THREADS=32\n"
     sbatch += "module add singularity/2.6.1\n"
     sbatch += "cd %s/../FastSim-Container/debian/\n" % MYDIR
-    sbatch += "singularity exec -B %s:/data fastsim.simg FastSim -c /data/input/generic_input.cfg %s --out_dir=/data/output/\n" % (MYDIR, job.sim_opt)
+    sbatch += "\n# parameters\n"
+    for key, value in job.sim_opt.items():
+        sbatch += "%s='%s'\n" % (key.upper(), value)
+    sbatch += "GENERIC='-c /data/input/generic_input.cfg --out_dir=/data/output/'\n"
+    sbatch += "\n# run\n"
+    sbatch += "singularity exec -B %s:/data fastsim.simg FastSim $GENERIC" % MYDIR
+    for key in job.sim_opt.keys():
+        sbatch += " $%s" % key.upper()
     return sbatch
 
 def save_job_file(job_script, job_file):
@@ -254,10 +272,10 @@ def save_job_file(job_script, job_file):
         file.write(job_script)
 
 def make_job_scripts(job, app):
-    qsub_meta = make_qsub_meta(job)
+    # qsub_meta = make_qsub_meta(job)
     sbatch_koios = make_sbatch_koios(job)
 
-    save_job_file(qsub_meta, "Metacentrum/%s_qsub.pbs" % app)
+    # save_job_file(qsub_meta, "Metacentrum/%s_qsub.pbs" % app)
     save_job_file(sbatch_koios, "KOIOS/%s_sbatch.sh" % app)
 
 
@@ -309,10 +327,10 @@ def qsub_ZA(sim_param):
     cpu_param = 2.0, PREP_PAR, 0.25, PRINT_PAR, PRINT_NM
     cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
-    n_cpus = get_n_cpus(cpus, mem, "Zel`dovich approximation")
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Zel`dovich approximation")
     ZA = Job_Param('ZA', mem, cpus, n_cpus)
     ZA.add_std_opt(sim_param)
-    ZA.add_sim_opt("--comp_ZA 1 ")
+    ZA.add_sim_opt("--comp_ZA 1 ", "app")
     make_job_scripts(ZA, 'ZA')
 
     # save_to_qsub(make_qsub(ZA), "scripts/ZA_qsub.pbs")
@@ -322,10 +340,10 @@ def qsub_FF(sim_param):
     cpu_param = 1.7, PREP_PAR, 2.0, PRINT_PAR, PRINT_NM
     cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
-    n_cpus = get_n_cpus(cpus, mem, "Frozen-flow approximation")
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-flow approximation")
     FF = Job_Param('FF', mem, cpus, n_cpus)
     FF.add_std_opt(sim_param)
-    FF.add_sim_opt("--comp_FF 1 ")
+    FF.add_sim_opt("--comp_FF 1 ", "app")
     make_job_scripts(FF, 'FF')
 
     # save_to_qsub(make_qsub(FF), "scripts/FF_qsub.pbs")
@@ -335,10 +353,10 @@ def qsub_FP(sim_param):
     cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM
     cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
     mem = memory_za(sim_param)
-    n_cpus = get_n_cpus(cpus, mem, "Frozen-potential approximation")
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-potential approximation")
     FP = Job_Param('FP', mem, cpus, n_cpus)
     FP.add_std_opt(sim_param)
-    FP.add_sim_opt("--comp_FP 1 ")
+    FP.add_sim_opt("--comp_FP 1 ", "app")
     make_job_scripts(FP, 'FP')
 
     # save_to_qsub(make_qsub(FP), "scripts/FP_qsub.pbs")
@@ -348,12 +366,11 @@ def qsub_FP_pp(sim_param):
     cpu_param = 16.0, PREP_PAR, 44.0, PRINT_PAR, PRINT_NM, 0
     cpus = cpu_mlt(sim_param) * cpu_pp(sim_param, *cpu_param)
     mem = memory_fp_pp(sim_param)
-    n_cpus = get_n_cpus(
-        cpus, mem, "Frozen-potential particle-particle approximation")
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-potential particle-particle approximation")
     FP_pp = Job_Param('FP_pp', mem, cpus, n_cpus)
     FP_pp.add_std_opt(sim_param)
-    FP_pp.add_sim_opt("--cut_radius %f " % sim_param.rs)
-    FP_pp.add_sim_opt("--comp_FP_pp 1 ")
+    FP_pp.add_sim_opt("--cut_radius %f " % sim_param.rs, "app")
+    FP_pp.add_sim_opt("--comp_FP_pp 1 ", "app")
     make_job_scripts(FP_pp, 'FP_pp')
 
     # save_to_qsub(make_qsub(FP_pp), "scripts/FP_pp_qsub.pbs")
@@ -364,12 +381,13 @@ def qsub_CHI(sim_param):
     cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM, 120
     cpus = cpu_mlt(sim_param) * cpu_chi(sim_param, *cpu_param)
     mem = memory_chi(sim_param)
-    n_cpus = get_n_cpus(cpus, mem, "Chameleon gravity approximation")
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Chameleon gravity approximation")
     CHI = Job_Param('CHI', mem, cpus, n_cpus)
     CHI.add_std_opt(sim_param)
-    CHI.add_sim_opt("--comp_chi 1 ")
-    CHI.add_sim_opt("--chi_n %f " % sim_param.chi_n)
-    CHI.add_sim_opt("--chi_phi %E " % sim_param.chi_phi)
+    CHI.add_sim_opt("--comp_chi 1 ", "app")
+    CHI.add_sim_opt("--chi_n %f " % sim_param.chi_n, "app")
+    CHI.add_sim_opt("--chi_phi %E " % sim_param.chi_phi, "app")
+    CHI.add_sim_opt("--comp_chi_lin %i " % sim_param.comp_chi_lin, "app")
     make_job_scripts(CHI, 'CHI')
 
     # save_to_qsub(make_qsub(CHI), "scripts/CHI_qsub.pbs")
@@ -380,7 +398,7 @@ if __name__ == "__main__":
     qsub_ZA(sim_param)
     qsub_FF(sim_param)
     qsub_FP(sim_param)
-    qsub_FP_pp(sim_param)
+    # qsub_FP_pp(sim_param)
     qsub_CHI(sim_param)
 
     # save_to_qsub(make_submit(), "scripts/submit_mlt.sh")
