@@ -117,7 +117,7 @@ def get_input():
     return sim_param
 
 
-def cpu_base(sim_param, prep_Nm, prep_Np, integ_np_nsteps, print_np, print_NM):
+def cpu_base(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1):
     cpus = 0
     cpus += prep_Nm * pow(sim_param.Nm / 128., 3)  # preparation
     cpus += prep_Np * pow(sim_param.Np / 128., 3)  # preparation
@@ -130,14 +130,14 @@ def cpu_base(sim_param, prep_Nm, prep_Np, integ_np_nsteps, print_np, print_NM):
     return cpus
 
 
-def cpu_pp(sim_param, prep_Nm, prep_Np, integ_np_nsteps, print_np, print_NM, integ_np_nsteps_extra):
+def cpu_pp(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1, integ_np_nsteps_extra=1):
     cpus = cpu_base(sim_param, prep_Nm, prep_Np,
                     integ_np_nsteps, print_np, print_NM)
     cpus += integ_np_nsteps_extra * sim_param.n_steps * \
         pow(sim_param.Np / 128., 3) * pow(sim_param.rs / 2.7, 3)
     return cpus
 
-def cpu_chi(sim_param, prep_Nm, prep_Np, integ_np_nsteps, print_np, print_NM, integ_np_nsteps_extra):
+def cpu_chi(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1, integ_np_nsteps_extra=1):
     cpus = cpu_base(sim_param, prep_Nm, prep_Np,
                     integ_np_nsteps, print_np, print_NM)
     cpus += integ_np_nsteps_extra * sim_param.n_steps * \
@@ -265,11 +265,12 @@ def make_sbatch_koios(job):
     sbatch += "singularity exec -B %s:/data fastsim.simg FastSim $GENERIC" % MYDIR
     for key in job.sim_opt.keys():
         sbatch += " $%s" % key.upper()
-    return sbatch
+    return sbatch + "\n"
 
 def save_job_file(job_script, job_file):
-    with open(job_file, 'w') as file:
-        file.write(job_script)
+    with open(job_file, 'w') as a_file:
+        a_file.write(job_script)
+    print("Job parameters saved to '%s'" % job_file)
 
 def make_job_scripts(job, app):
     # qsub_meta = make_qsub_meta(job)
@@ -324,8 +325,15 @@ def cpu_mlt(sim_param):
     return paired_sim(sim_param) * sim_param.mlt_runs
 
 def qsub_ZA(sim_param):
-    cpu_param = 2.0, PREP_PAR, 0.25, PRINT_PAR, PRINT_NM
-    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
+    cpu_param = {
+        'prep_Nm' : 2.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 0.25,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, **cpu_param)
     mem = memory_za(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Zel`dovich approximation")
     ZA = Job_Param('ZA', mem, cpus, n_cpus)
@@ -333,12 +341,17 @@ def qsub_ZA(sim_param):
     ZA.add_sim_opt("--comp_ZA 1 ", "app")
     make_job_scripts(ZA, 'ZA')
 
-    # save_to_qsub(make_qsub(ZA), "scripts/ZA_qsub.pbs")
-
 
 def qsub_FF(sim_param):
-    cpu_param = 1.7, PREP_PAR, 2.0, PRINT_PAR, PRINT_NM
-    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
+    cpu_param = {
+        'prep_Nm' : 2.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 3.0,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, **cpu_param)
     mem = memory_za(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-flow approximation")
     FF = Job_Param('FF', mem, cpus, n_cpus)
@@ -346,12 +359,16 @@ def qsub_FF(sim_param):
     FF.add_sim_opt("--comp_FF 1 ", "app")
     make_job_scripts(FF, 'FF')
 
-    # save_to_qsub(make_qsub(FF), "scripts/FF_qsub.pbs")
-
-
 def qsub_FP(sim_param):
-    cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM
-    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, *cpu_param)
+    cpu_param = {
+        'prep_Nm' : 9.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 3.5,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, **cpu_param)
     mem = memory_za(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-potential approximation")
     FP = Job_Param('FP', mem, cpus, n_cpus)
@@ -359,12 +376,17 @@ def qsub_FP(sim_param):
     FP.add_sim_opt("--comp_FP 1 ", "app")
     make_job_scripts(FP, 'FP')
 
-    # save_to_qsub(make_qsub(FP), "scripts/FP_qsub.pbs")
-
-
 def qsub_FP_pp(sim_param):
-    cpu_param = 16.0, PREP_PAR, 44.0, PRINT_PAR, PRINT_NM, 0
-    cpus = cpu_mlt(sim_param) * cpu_pp(sim_param, *cpu_param)
+    cpu_param = {
+        'prep_Nm' : 20.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 50,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM,
+        'integ_np_nsteps_extra' : 0
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_pp(sim_param, **cpu_param)
     mem = memory_fp_pp(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Frozen-potential particle-particle approximation")
     FP_pp = Job_Param('FP_pp', mem, cpus, n_cpus)
@@ -373,13 +395,17 @@ def qsub_FP_pp(sim_param):
     FP_pp.add_sim_opt("--comp_FP_pp 1 ", "app")
     make_job_scripts(FP_pp, 'FP_pp')
 
-    # save_to_qsub(make_qsub(FP_pp), "scripts/FP_pp_qsub.pbs")
-
-
-
 def qsub_CHI(sim_param):
-    cpu_param = 7.0, PREP_PAR, 2.1, PRINT_PAR, PRINT_NM, 120
-    cpus = cpu_mlt(sim_param) * cpu_chi(sim_param, *cpu_param)
+    cpu_param = {
+        'prep_Nm' : 9.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 3.0,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM,
+        'integ_np_nsteps_extra' : 150
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_chi(sim_param, **cpu_param)
     mem = memory_chi(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Chameleon gravity approximation")
     CHI = Job_Param('CHI', mem, cpus, n_cpus)
@@ -390,9 +416,6 @@ def qsub_CHI(sim_param):
     CHI.add_sim_opt("--comp_chi_lin %i " % sim_param.comp_chi_lin, "app")
     make_job_scripts(CHI, 'CHI')
 
-    # save_to_qsub(make_qsub(CHI), "scripts/CHI_qsub.pbs")
-
-
 if __name__ == "__main__":
     sim_param = get_input()
     qsub_ZA(sim_param)
@@ -401,8 +424,5 @@ if __name__ == "__main__":
     # qsub_FP_pp(sim_param)
     qsub_CHI(sim_param)
 
-    # save_to_qsub(make_submit(), "scripts/submit_mlt.sh")
     # st = os.stat('scripts/submit_mlt.sh')
     # os.chmod('scripts/submit_mlt.sh', st.st_mode | stat.S_IEXEC)
-
-    # save_to_qsub(make_stack_qsub(), "scripts/stack_qsub.pbs")
