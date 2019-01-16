@@ -8,6 +8,9 @@ except ImportError:
     import __builtin__ as builtins
 
 # other modules
+import os
+import stat
+import sys
 import math
 
 class Job_Param(object):
@@ -97,7 +100,7 @@ def memory_chi(sim_param):
     mem += 8*(sim_param.num_m - 1) / 7 * 8 * 3  # chi_solver
     return mem / float(1024 * 1024 * 1024)  # convert to GB
 
-def get_input():
+def get_std_input():
     Nm = int(input("Enter number of potential mesh points per dimenson: "))
     NM = int(input("Enter number of analysis mesh points per dimenson: "))
     Np = int(input("Enter number of particles per dimenson: "))
@@ -111,11 +114,20 @@ def get_input():
     # sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
     sim_param.mlt_runs = int(input("Enter number of runs: "))
     sim_param.pair = int(input("Run pair of simulations? "))
+    return sim_param
+
+def get_chi_input(sim_param):
     sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
     sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
     sim_param.comp_chi_lin = int(input("Run linear solver of chameleon? "))
-    return sim_param
 
+def get_input(sim_param=None, with_chi=True):
+    """ Create simulation parameters. If given already created sim_param, get only chameleon input. """
+    if sim_param is None:
+        sim_param = get_std_input()
+    if with_chi:
+        get_chi_input(sim_param)
+    return sim_param
 
 def cpu_base(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1):
     cpus = 0
@@ -280,16 +292,28 @@ def make_job_scripts(job, app):
     save_job_file(sbatch_koios, "KOIOS/%s_sbatch.sh" % app)
 
 
-# def make_submit():
-#     submit = ("#!/bin/bash\n"
-#               "NUM_ALL=$1\n"
-#               "for NUM in `seq $NUM_ALL`; do\n"
-#               "    qsub scripts/ZA_qsub.pbs\n"
-#               "    qsub scripts/FF_qsub.pbs\n"
-#               "    qsub scripts/FP_qsub.pbs\n"
-#               "    qsub scripts/FP_pp_qsub.pbs\n"
-#               "done\n")
-#     return submit
+def make_submit(job_files, cmd='sbatch'):
+    # bash for-loop start
+    submit = ("#!/bin/bash\n"
+              "NUM_ALL=$1\n"
+              "for NUM in `seq $NUM_ALL`; do\n")
+    
+    # bash for-loop 
+    for job_file in job_files:
+        submit += "    %s %s\n" % (cmd, job_file)
+
+    # bash for-loop end
+    submit += "done\n"
+    return submit
+
+def create_mlt_submit(job_files, sh_file="KOIOS/mlt_CHI.sh", cmd='sbatch'):
+    # create bash file
+    submit = make_submit(job_files, cmd=cmd)
+    save_job_file(submit, sh_file)
+
+    # make it executable
+    st = os.stat(sh_file)
+    os.chmod(sh_file, st.st_mode | stat.S_IEXEC)
 
 def make_stack_qsub():
     qsub = ("#!/bin/bash\n"
@@ -395,7 +419,11 @@ def qsub_FP_pp(sim_param):
     FP_pp.add_sim_opt("--comp_FP_pp 1 ", "app")
     make_job_scripts(FP_pp, 'FP_pp')
 
-def qsub_CHI(sim_param):
+def qsub_CHI_base(sim_param):
+    # get chameleon simulation parameters
+    sim_param = get_input(sim_param=sim_param)
+
+    # get required memory and wall time
     cpu_param = {
         'prep_Nm' : 9.0, 
         'prep_Np' : PREP_PAR,
@@ -404,25 +432,51 @@ def qsub_CHI(sim_param):
         'print_NM' : PRINT_NM,
         'integ_np_nsteps_extra' : 150
     }
-
     cpus = cpu_mlt(sim_param) * cpu_chi(sim_param, **cpu_param)
     mem = memory_chi(sim_param)
     n_cpus = 32 # get_n_cpus(cpus, mem, "Chameleon gravity approximation")
+
+    # creat chameleon job
     CHI = Job_Param('CHI', mem, cpus, n_cpus)
     CHI.add_std_opt(sim_param)
     CHI.add_sim_opt("--comp_chi 1 ", "app")
     CHI.add_sim_opt("--chi_n %f " % sim_param.chi_n, "app")
     CHI.add_sim_opt("--chi_phi %E " % sim_param.chi_phi, "app")
     CHI.add_sim_opt("--comp_chi_lin %i " % sim_param.comp_chi_lin, "app")
+
+    return CHI
+
+def qsub_CHI(sim_param):
+    CHI = qsub_CHI_base(sim_param)    
     make_job_scripts(CHI, 'CHI')
 
-if __name__ == "__main__":
-    sim_param = get_input()
-    qsub_ZA(sim_param)
-    qsub_FF(sim_param)
-    qsub_FP(sim_param)
-    # qsub_FP_pp(sim_param)
-    qsub_CHI(sim_param)
+def qsub_CHI_mlt(sim_param):
+    print("Creating multiple job files for Chameleon gravity.")
+    Nchi = int(input("Enter number of sets of parameters: "))
+    job_files = []
+    for i in range(Nchi):
+        CHI = qsub_CHI_base(sim_param)
+        app = 'CHI_%i' % i
+        make_job_scripts(CHI, app)
+        job_files.append("KOIOS/%s_sbatch.sh" % app)
 
-    # st = os.stat('scripts/submit_mlt.sh')
-    # os.chmod('scripts/submit_mlt.sh', st.st_mode | stat.S_IEXEC)
+    create_mlt_submit(job_files)
+
+if __name__ == "__main__":
+    # standard creation of all job files
+    if len(sys.argv) == 1:
+        sim_param = get_input()
+        qsub_ZA(sim_param)
+        qsub_FF(sim_param)
+        qsub_FP(sim_param)
+        # qsub_FP_pp(sim_param)
+        qsub_CHI(sim_param)
+
+    # create only one job file
+    else:
+        try:
+            qsub_fce = getattr(sys.modules[__name__], 'qsub_%s' % sys.argv[1])
+            sim_param = get_input(with_chi=False)
+            qsub_fce(sim_param)
+        except AttributeError:
+            print("Wrong arguments!")
