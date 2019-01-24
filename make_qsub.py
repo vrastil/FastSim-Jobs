@@ -62,7 +62,7 @@ class Sim_Param(object):
             math.ceil(self.n_steps / float(print_every))) + 1 if print_every else 0
         self.rs = 0
         self.mlt_runs = 1
-        self.pair = 0
+        self.pair = False
         self.chi_phi = 0
         self.chi_n = 0
         self.comp_chi_lin = 0
@@ -113,7 +113,7 @@ def get_std_input():
     sim_param = Sim_Param(Nm, NM, Np, box, z, z0, da, print_every)
     # sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
     sim_param.mlt_runs = int(input("Enter number of runs: "))
-    sim_param.pair = int(input("Run pair of simulations? "))
+    sim_param.pair = bool(input("Run pair of simulations? "))
     return sim_param
 
 def get_chi_input(sim_param):
@@ -208,7 +208,7 @@ def get_n_cpus(cpus, mem, approx_str):
 def get_safe_mem_wall_time(mem, cpus, n_cpus):
     eff_n_cpu = get_eff_n_cpus(n_cpus)
     mem = int(math.ceil((mem + 0.3) * 1.03))  # extra 0.3 GB and 3%
-    h, m, _ = convert_s2hms(cpus * 1.5 / eff_n_cpu)  # extra 50% of Wall time
+    h, m, _ = convert_s2hms(cpus * 2.0 / eff_n_cpu)  # extra 100% of Wall time
     if (h + m) < 1:
         m = 1
     return mem, h, m  # seconds are ambiguous
@@ -322,7 +322,7 @@ def make_stack_qsub():
             "#PBS -j oe\n"
             "#PBS -N cosmo_stack\n"
             "#PBS -o logs/\n"
-            "#PBS -e logs/\n\n\n"
+            "#PBS -e logs/err/\n\n\n"
             "source /software/modules/init\n"
             "module add python27-modules-intel\n"
             "export PYTHONPATH=$PYTHONPATH:/storage/brno2/home/vrastilm/Adhesion-Approximation:/storage/brno2/home/vrastilm/CCL\n"
@@ -340,10 +340,10 @@ PRINT_PAR = 3.0
 PRINT_NM = 1.7
 
 def paired_sim(sim_param):
-    if sim_param.pair == 0:
-        return 1
-    else:
+    if sim_param.pair:
         return 2
+    else:
+        return 1
 
 def cpu_mlt(sim_param):
     return paired_sim(sim_param) * sim_param.mlt_runs

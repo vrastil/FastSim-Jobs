@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="koios:/home/users/vrastil/GIT/FastSim-Jobs/output/"
-DEST="/home/vrastil/Documents/GIT/FastSim/jobs/output/"
+DEST="/home/michal/Documents/GIT/FastSim/jobs/output/"
 
 USAGE="
 Usage:
@@ -23,7 +23,7 @@ if [[ $# != 1 ]] && [[ $# != 2 ]]; then
   exit
 fi
 
-OTHER="-azmh --stats --info=progress2"
+OTHER="-azmh --stats --progress --info=progress2"
 INCLUDE="--include=*.log --include=*/"
 EXCLUDE="--exclude=*"
 
