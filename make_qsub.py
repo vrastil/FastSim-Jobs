@@ -12,6 +12,7 @@ import os
 import stat
 import sys
 import math
+import json
 
 class Job_Param(object):
     def __init__(self, app, mem, cpus, n_cpus):
@@ -45,7 +46,7 @@ class Job_Param(object):
 
 
 class Sim_Param(object):
-    def __init__(self, Nm, NM, Np, box, z, z0, da, print_every):
+    def __init__(self, Nm=0, NM=0, Np=0, box=0, z=0, z0=0, da=0, print_every=0):
         self.Nm = Nm
         self.NM = NM
         self.Np = Np
@@ -110,7 +111,7 @@ def get_std_input():
     da = float(input("Enter value of time-step: "))
     print_every = int(input("Enter how often there will be printing: "))
 
-    sim_param = Sim_Param(Nm, NM, Np, box, z, z0, da, print_every)
+    sim_param = Sim_Param(Nm=Nm, NM=NM, Np=Np, box=box, z=z, z0=z0, da=da, print_every=print_every)
     # sim_param.rs = float(input("Enter value of short-range cutof (FP_pp): "))
     sim_param.mlt_runs = int(input("Enter number of runs: "))
     sim_param.pair = bool(input("Run pair of simulations? "))
@@ -119,14 +120,29 @@ def get_std_input():
 def get_chi_input(sim_param):
     sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
     sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
-    sim_param.comp_chi_lin = int(input("Run linear solver of chameleon? "))
+    sim_param.comp_chi_lin = bool(input("Run linear solver of chameleon? "))
 
-def get_input(sim_param=None, with_chi=True):
+def get_input(sim_param=None, with_chi=False):
     """ Create simulation parameters. If given already created sim_param, get only chameleon input. """
     if sim_param is None:
         sim_param = get_std_input()
     if with_chi:
         get_chi_input(sim_param)
+    return sim_param
+
+def get_param_from_json(data, default=None, with_chi=False):
+    if default is not None:
+        basic = data.get("basic", default["basic"])
+        mlt = data.get("mlt", default["mlt"])
+        chi = data.get("chi", default["chi"])
+
+    sim_param = Sim_Param(**basic)
+    sim_param.mlt_runs = mlt["mlt_runs"]
+    sim_param.pair = mlt["pair"]
+    if with_chi:
+        sim_param.chi_phi = chi["phi"]
+        sim_param.chi_n = chi["n"]
+        sim_param.comp_chi_lin = chi["lin"]
     return sim_param
 
 def cpu_base(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1):
@@ -348,7 +364,7 @@ def paired_sim(sim_param):
 def cpu_mlt(sim_param):
     return paired_sim(sim_param) * sim_param.mlt_runs
 
-def qsub_ZA(sim_param):
+def qsub_ZA(sim_param, app='ZA'):
     cpu_param = {
         'prep_Nm' : 2.0, 
         'prep_Np' : PREP_PAR,
@@ -363,10 +379,10 @@ def qsub_ZA(sim_param):
     ZA = Job_Param('ZA', mem, cpus, n_cpus)
     ZA.add_std_opt(sim_param)
     ZA.add_sim_opt("--comp_ZA 1 ", "app")
-    make_job_scripts(ZA, 'ZA')
+    make_job_scripts(ZA, app)
 
 
-def qsub_FF(sim_param):
+def qsub_FF(sim_param, app='FF'):
     cpu_param = {
         'prep_Nm' : 2.0, 
         'prep_Np' : PREP_PAR,
@@ -381,9 +397,9 @@ def qsub_FF(sim_param):
     FF = Job_Param('FF', mem, cpus, n_cpus)
     FF.add_std_opt(sim_param)
     FF.add_sim_opt("--comp_FF 1 ", "app")
-    make_job_scripts(FF, 'FF')
+    make_job_scripts(FF, app)
 
-def qsub_FP(sim_param):
+def qsub_FP(sim_param, app='FP'):
     cpu_param = {
         'prep_Nm' : 9.0, 
         'prep_Np' : PREP_PAR,
@@ -398,9 +414,9 @@ def qsub_FP(sim_param):
     FP = Job_Param('FP', mem, cpus, n_cpus)
     FP.add_std_opt(sim_param)
     FP.add_sim_opt("--comp_FP 1 ", "app")
-    make_job_scripts(FP, 'FP')
+    make_job_scripts(FP, app)
 
-def qsub_FP_pp(sim_param):
+def qsub_FP_pp(sim_param, app='FP_pp'):
     cpu_param = {
         'prep_Nm' : 20.0, 
         'prep_Np' : PREP_PAR,
@@ -417,11 +433,11 @@ def qsub_FP_pp(sim_param):
     FP_pp.add_std_opt(sim_param)
     FP_pp.add_sim_opt("--cut_radius %f " % sim_param.rs, "app")
     FP_pp.add_sim_opt("--comp_FP_pp 1 ", "app")
-    make_job_scripts(FP_pp, 'FP_pp')
+    make_job_scripts(FP_pp, app)
 
-def qsub_CHI_base(sim_param):
+def qsub_CHI_base(sim_param, with_chi=True):
     # get chameleon simulation parameters
-    sim_param = get_input(sim_param=sim_param)
+    sim_param = get_input(sim_param=sim_param, with_chi=with_chi)
 
     # get required memory and wall time
     cpu_param = {
@@ -446,21 +462,36 @@ def qsub_CHI_base(sim_param):
 
     return CHI
 
-def qsub_CHI(sim_param):
-    CHI = qsub_CHI_base(sim_param)    
-    make_job_scripts(CHI, 'CHI')
+def qsub_CHI(sim_param, app='CHI', with_chi=False):
+    CHI = qsub_CHI_base(sim_param, with_chi=with_chi)
+    make_job_scripts(CHI, app)
 
 def qsub_CHI_mlt(sim_param):
     print("Creating multiple job files for Chameleon gravity.")
     Nchi = int(input("Enter number of sets of parameters: "))
     job_files = []
     for i in range(Nchi):
-        CHI = qsub_CHI_base(sim_param)
         app = 'CHI_%i' % i
-        make_job_scripts(CHI, app)
+        qsub_CHI(sim_param, app=app, with_chi=True)
         job_files.append("KOIOS/%s_sbatch.sh" % app)
 
     create_mlt_submit(job_files)
+
+def qsub_json(data):
+    default = data.pop("default", None)
+    job_files = []
+    for app, param_list in data.items():
+        try:
+            qsub_fce = getattr(sys.modules[__name__], 'qsub_%s' % app)
+            for i, param in enumerate(param_list):
+                sim_param = get_param_from_json(param, default=default, with_chi=(app=='CHI'))
+                name = "%s_%i" % (app, i)
+                qsub_fce(sim_param, app=name)
+                job_files.append("KOIOS/%s_sbatch.sh" % name)
+        except AttributeError:
+            print("Wrong format of json file!")
+    create_mlt_submit(job_files, sh_file="KOIOS/all_runs.sh")
+
 
 if __name__ == "__main__":
     # standard creation of all job files
@@ -470,13 +501,19 @@ if __name__ == "__main__":
         qsub_FF(sim_param)
         qsub_FP(sim_param)
         # qsub_FP_pp(sim_param)
-        qsub_CHI(sim_param)
+        qsub_CHI(sim_param, with_chi=True)
+
+    # we passed json file with all the info
+    elif sys.argv[1].endswith('.json'):
+        with open(sys.argv[1]) as data_file:
+            data = json.loads(data_file.read())
+            qsub_json(data)
 
     # create only one job file
     else:
         try:
             qsub_fce = getattr(sys.modules[__name__], 'qsub_%s' % sys.argv[1])
-            sim_param = get_input(with_chi=False)
+            sim_param = get_input()
             qsub_fce(sim_param)
         except AttributeError:
             print("Wrong arguments!")

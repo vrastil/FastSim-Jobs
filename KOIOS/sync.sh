@@ -23,7 +23,7 @@ if [[ $# != 1 ]] && [[ $# != 2 ]]; then
   exit
 fi
 
-OTHER="-azmh --stats --progress --info=progress2"
+OTHER="-azmh --stats --info=progress2"
 INCLUDE="--include=*.log --include=*/"
 EXCLUDE="--exclude=*"
 
