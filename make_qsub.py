@@ -43,10 +43,11 @@ class Job_Param(object):
         self.add_sim_opt("--print_every %i " % sim_param.print_every, "redshift")
         self.add_sim_opt("--mlt_runs %i " % sim_param.mlt_runs, "mlt")
         self.add_sim_opt("--pair %i " % sim_param.pair, "mlt")
+        self.add_sim_opt("--smoothing_k %f " % sim_param.smoothing_k, "app")
 
 
 class Sim_Param(object):
-    def __init__(self, Nm=0, NM=0, Np=0, box=0, z=0, z0=0, da=0, print_every=0):
+    def __init__(self, Nm=0, NM=0, Np=0, box=0, z=0, z0=0, da=0, print_every=0, smoothing_k=0):
         self.Nm = Nm
         self.NM = NM
         self.Np = Np
@@ -67,6 +68,7 @@ class Sim_Param(object):
         self.chi_phi = 0
         self.chi_n = 0
         self.comp_chi_lin = 0
+        self.smoothing_k = smoothing_k
 
 
 def memory_base(sim_param):
@@ -131,10 +133,19 @@ def get_input(sim_param=None, with_chi=False):
     return sim_param
 
 def get_param_from_json(data, default=None, with_chi=False):
+    # load default values, DO NOT CHANGE IT
     if default is not None:
-        basic = data.get("basic", default["basic"])
-        mlt = data.get("mlt", default["mlt"])
-        chi = data.get("chi", default["chi"])
+        basic = default["basic"].copy()
+        mlt = default["mlt"].copy()
+        chi = default["chi"].copy()
+    else:
+        basic, mlt, chi = {}, {}, {}
+    
+    # override specified parameters
+    for group in ["basic", "mlt", "chi"]:
+        if group in data:
+            for key, value in data[group].items():
+                locals()[group][key] = value
 
     sim_param = Sim_Param(**basic)
     sim_param.mlt_runs = mlt["mlt_runs"]
@@ -381,6 +392,22 @@ def qsub_ZA(sim_param, app='ZA'):
     ZA.add_sim_opt("--comp_ZA 1 ", "app")
     make_job_scripts(ZA, app)
 
+def qsub_TZA(sim_param, app='TZA'):
+    cpu_param = {
+        'prep_Nm' : 2.0, 
+        'prep_Np' : PREP_PAR,
+        'integ_np_nsteps' : 0.25,
+        'print_np' : PRINT_PAR,
+        'print_NM' : PRINT_NM
+    }
+
+    cpus = cpu_mlt(sim_param) * cpu_base(sim_param, **cpu_param)
+    mem = memory_za(sim_param)
+    n_cpus = 32 # get_n_cpus(cpus, mem, "Truncated Zel`dovich approximation")
+    TZA = Job_Param('TZA', mem, cpus, n_cpus)
+    TZA.add_std_opt(sim_param)
+    TZA.add_sim_opt("--comp_TZA 1 ", "app")
+    make_job_scripts(TZA, app)
 
 def qsub_FF(sim_param, app='FF'):
     cpu_param = {

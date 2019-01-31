@@ -4,14 +4,15 @@
             "Nm" : 512,
             "NM" : 1024,
             "Np" : 512,
-            "box" : 500.0,
+            "box" : 2000.0,
             "z" : 200.0,
             "z0" : 0.0,
             "da" : 0.01,
-            "print_every" : 5
+            "print_every" : 5,
+            "smoothing_k" : 0
         },
         "mlt" : {
-            "mlt_runs" : 10,
+            "mlt_runs" : 5,
             "pair" : true
         },
         "chi" : {
@@ -21,12 +22,29 @@
         }
     },
     "ZA" : [
-        {}
+    ],
+    "TZA" : [
+        {
+            "basic" : {
+                "box" : 2000,
+                "smoothing_k" : 0.5
+            }
+        },
+        {
+            "basic" : {
+                "box" : 500,
+                "smoothing_k" : 0.5
+            }
+        },
+        {
+            "basic" : {
+                "box" : 100,
+                "smoothing_k" : 0.5
+            }
+        }
     ],
     "FF" : [
-        {}
     ],
     "FP" : [
-        {}
     ]
 }
