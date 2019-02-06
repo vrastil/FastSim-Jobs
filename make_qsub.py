@@ -295,7 +295,7 @@ def make_sbatch_koios(job):
     sbatch += "\n# preparation\n"
     sbatch += "export OMP_NUM_THREADS=32\n"
     sbatch += "module add singularity/2.6.1\n"
-    sbatch += "cd %s/../FastSim-Container/debian/\n" % MYDIR
+    sbatch += "cd %s/../FastSim-Container/\n" % MYDIR
     sbatch += "\n# parameters\n"
     for key, value in job.sim_opt.items():
         sbatch += "%s='%s'\n" % (key.upper(), value)
