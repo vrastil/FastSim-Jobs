@@ -41,13 +41,14 @@ class Job_Param(object):
         self.add_sim_opt("--redshift_0 %f " % sim_param.z0, "redshift")
         self.add_sim_opt("--time_step %f " % sim_param.da, "redshift")
         self.add_sim_opt("--print_every %i " % sim_param.print_every, "redshift")
+        self.add_sim_opt("--print_vel_pwr %i " % sim_param.print_vel_pwr, "redshift")
         self.add_sim_opt("--mlt_runs %i " % sim_param.mlt_runs, "mlt")
         self.add_sim_opt("--pair %i " % sim_param.pair, "mlt")
         self.add_sim_opt("--smoothing_k %f " % sim_param.smoothing_k, "app")
 
 
 class Sim_Param(object):
-    def __init__(self, Nm=0, NM=0, Np=0, box=0, z=0, z0=0, da=0, print_every=0, smoothing_k=0):
+    def __init__(self, Nm=0, NM=0, Np=0, box=0, z=0, z0=0, da=0, print_every=0, smoothing_k=0, print_vel_pwr=0):
         self.Nm = Nm
         self.NM = NM
         self.Np = Np
@@ -69,6 +70,7 @@ class Sim_Param(object):
         self.chi_n = 0
         self.comp_chi_lin = 0
         self.smoothing_k = smoothing_k
+        self.print_vel_pwr = print_vel_pwr
 
 
 def memory_base(sim_param):
