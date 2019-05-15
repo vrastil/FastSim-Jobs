@@ -1,11 +1,7 @@
 
 # ignore output data and log messages
-logs/
+logs*/
 output/
 
 # ignore created batch scripts
-*.sh
-*.pbs
-
-!Metacentrum/sync.sh
-!KOIOS/sync.sh
+batch_scripts/
