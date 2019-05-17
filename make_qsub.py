@@ -14,6 +14,8 @@ import sys
 import math
 import json
 
+scr_dir = "batch_scripts"
+
 class Job_Param(object):
     def __init__(self, app, mem, cpus, n_cpus):
         mem, h, m = get_safe_mem_wall_time(mem, cpus, n_cpus)
@@ -243,39 +245,8 @@ def get_safe_mem_wall_time(mem, cpus, n_cpus):
     return mem, h, m  # seconds are ambiguous
 
 
-def make_qsub_meta(job):
-    qsub = "#!/bin/bash\n"
-    qsub += "#PBS -l select=1:ncpus=%i:mem=%igb:scratch_local=400mb\n" % (job.n_cpus, job.mem)
-    if job.wall_time_m < 10:
-        qsub += "#PBS -l walltime=%i:0%i:00\n" % (
-            job.wall_time_h, job.wall_time_m)
-    else:
-        qsub += "#PBS -l walltime=%i:%i:00\n" % (
-            job.wall_time_h, job.wall_time_m)
-    qsub += "#PBS -N %s_fastsim\n" % job.app
-    qsub += ("#PBS -j oe\n"
-             "#PBS -o logs/\n"
-             "#PBS -e logs/\n\n\n"
-             ##############
-             # RUN SCRIPT #
-             ##############
-             "trap 'clean_scratch' TERM EXIT\n"
-             "export MYDIR=/storage/brno2/home/vrastilm\n"
-             "source /software/modules/init\n"	
-             "source $MYDIR/.profile\n"	
-             "export OMP_NUM_THREADS=$PBS_NUM_PPN\n"
-             "cd $SCRATCHDIR\n"
-             "cp -r $MYDIR/Adhesion-Approximation/include ./\n"
-             "cp -r $MYDIR/Adhesion-Approximation/src ./\n"	
-             "cp $MYDIR/Adhesion-Approximation/Makefile ./\n"	
-             "make clean\n"	
-             "make -j $PBS_NUM_PPN\n\n"	
-             )
-    qsub += "time ./adh_app -c $MYDIR/Adhesion-Approximation/input/generic_input.cfg %s\n" % job.sim_opt
-    return qsub
-
 def make_sbatch_koios(job):
-    MYDIR = "/home/users/vrastil/GIT/FastSim-Jobs"
+    MYDIR = "/home/users/vrastil/GIT/FastSim/jobs"
     sbatch = "#!/bin/bash\n"
     sbatch += ("#SBATCH --nodes=1\n"
                "#SBATCH --cpus-per-task=32\n")
@@ -297,7 +268,6 @@ def make_sbatch_koios(job):
     sbatch += "\n# preparation\n"
     sbatch += "export OMP_NUM_THREADS=32\n"
     sbatch += "module add singularity/2.6.1\n"
-    sbatch += "cd %s/../FastSim-Container/\n" % MYDIR
     sbatch += "\n# parameters\n"
     for key, value in job.sim_opt.items():
         sbatch += "%s='%s'\n" % (key.upper(), value)
@@ -314,11 +284,10 @@ def save_job_file(job_script, job_file):
     print("Job parameters saved to '%s'" % job_file)
 
 def make_job_scripts(job, app):
-    # qsub_meta = make_qsub_meta(job)
     sbatch_koios = make_sbatch_koios(job)
 
     # save_job_file(qsub_meta, "Metacentrum/%s_qsub.pbs" % app)
-    save_job_file(sbatch_koios, "KOIOS/%s_sbatch.sh" % app)
+    save_job_file(sbatch_koios, "%s/%s_sbatch.sh" % (scr_dir, app))
 
 
 def make_submit(job_files, cmd='sbatch'):
@@ -335,7 +304,7 @@ def make_submit(job_files, cmd='sbatch'):
     submit += "done\n"
     return submit
 
-def create_mlt_submit(job_files, sh_file="KOIOS/mlt_CHI.sh", cmd='sbatch'):
+def create_mlt_submit(job_files, sh_file="%s/mlt_CHI.sh" % scr_dir, cmd='sbatch'):
     # create bash file
     submit = make_submit(job_files, cmd=cmd)
     save_job_file(submit, sh_file)
@@ -343,25 +312,6 @@ def create_mlt_submit(job_files, sh_file="KOIOS/mlt_CHI.sh", cmd='sbatch'):
     # make it executable
     st = os.stat(sh_file)
     os.chmod(sh_file, st.st_mode | stat.S_IEXEC)
-
-def make_stack_qsub():
-    qsub = ("#!/bin/bash\n"
-            "#PBS -l select=1:ncpus=1:mem=400mb\n"
-            "#PBS -l walltime=0:30:00\n"
-            "#PBS -j oe\n"
-            "#PBS -N cosmo_stack\n"
-            "#PBS -o logs/\n"
-            "#PBS -e logs/err/\n\n\n"
-            "source /software/modules/init\n"
-            "module add python27-modules-intel\n"
-            "export PYTHONPATH=$PYTHONPATH:/storage/brno2/home/vrastilm/Adhesion-Approximation:/storage/brno2/home/vrastilm/CCL\n"
-            "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/storage/brno2/home/vrastilm/local/lib\n\n"
-            "COM+=\"from simpy.stacking import stack_all; \"\n"
-            "COM+=\"out_dir='/storage/brno2/home/vrastilm/Adhesion-Approximation/output/'; \"\n"
-            "COM+=\"stack_all(out_dir)\"\n\n"
-            "python -c \"$COM\"\n"
-            )
-    return qsub
 
 # already quite safe values
 PREP_PAR = 0.4
@@ -502,7 +452,7 @@ def qsub_CHI_mlt(sim_param):
     for i in range(Nchi):
         app = 'CHI_%i' % i
         qsub_CHI(sim_param, app=app, with_chi=True)
-        job_files.append("KOIOS/%s_sbatch.sh" % app)
+        job_files.append("%s/%s_sbatch.sh" % (scr_dir, app))
 
     create_mlt_submit(job_files)
 
@@ -516,10 +466,10 @@ def qsub_json(data):
                 sim_param = get_param_from_json(param, default=default, with_chi=(app=='CHI'))
                 name = "%s_%i" % (app, i)
                 qsub_fce(sim_param, app=name)
-                job_files.append("KOIOS/%s_sbatch.sh" % name)
+                job_files.append("%s/%s_sbatch.sh" % (scr_dir, name))
         except AttributeError:
             print("Wrong format of json file!")
-    create_mlt_submit(job_files, sh_file="KOIOS/all_runs.sh")
+    create_mlt_submit(job_files, sh_file="%s/all_runs.sh" % scr_dir)
 
 
 if __name__ == "__main__":
@@ -527,6 +477,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         sim_param = get_input()
         qsub_ZA(sim_param)
+        qsub_TZA(sim_param)
         qsub_FF(sim_param)
         qsub_FP(sim_param)
         # qsub_FP_pp(sim_param)
