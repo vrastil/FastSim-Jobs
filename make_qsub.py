@@ -105,6 +105,7 @@ def memory_chi(sim_param):
     mem += sim_param.num_m * 8 * 3  # chi_force
     mem += 8*(sim_param.num_m - 1) / 7 * 8 * 1  # drho
     mem += 8*(sim_param.num_m - 1) / 7 * 8 * 3  # chi_solver
+    mem *= 1.3 # ??? jobs are killed due to the memory exceed limit
     return mem / float(1024 * 1024 * 1024)  # convert to GB
 
 def get_std_input():

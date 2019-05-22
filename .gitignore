@@ -5,3 +5,6 @@ output/
 
 # ignore created batch scripts
 batch_scripts/
+
+# ignore containers
+*.simg
