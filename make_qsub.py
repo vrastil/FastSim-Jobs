@@ -14,7 +14,14 @@ import sys
 import math
 import json
 
-scr_dir = "batch_scripts"
+# important paths
+ROOT = "/home/users/vrastil/GIT/FastSim/"
+
+SCRIPT_DIR = ROOT + "jobs/batch_scripts/"
+OUT_DIR = ROOT + "jobs/output/"
+LOG_DIR = ROOT + "jobs/logs/"
+INPUT_CFG = ROOT + "jobs/input/generic_input.cfg"
+SINGULARITY_IMG = ROOT + "singularity/FastSim.sif"
 
 class Job_Param(object):
     def __init__(self, app, mem, cpus, n_cpus):
@@ -240,14 +247,13 @@ def get_n_cpus(cpus, mem, approx_str):
 def get_safe_mem_wall_time(mem, cpus, n_cpus):
     eff_n_cpu = get_eff_n_cpus(n_cpus)
     mem = int(math.ceil((mem + 0.3) * 1.03))  # extra 0.3 GB and 3%
-    h, m, _ = convert_s2hms(cpus * 2.0 / eff_n_cpu)  # extra 100% of Wall time
+    h, m, _ = convert_s2hms(cpus * 3.0 / eff_n_cpu)  # extra 200% of Wall time
     if (h + m) < 1:
         m = 1
     return mem, h, m  # seconds are ambiguous
 
 
 def make_sbatch_koios(job):
-    MYDIR = "/home/users/vrastil/GIT/FastSim/jobs"
     sbatch = "#!/bin/bash\n"
     sbatch += ("#SBATCH --nodes=1\n"
                "#SBATCH --cpus-per-task=32\n")
@@ -259,8 +265,8 @@ def make_sbatch_koios(job):
         sbatch += "#SBATCH --time=%i:%i:00\n" % (
             job.wall_time_h, job.wall_time_m)
     sbatch += "#SBATCH --job-name=%s_fastsim\n" % job.app
-    sbatch += "#SBATCH --output=%s/logs/%%x_%%j.log\n" % MYDIR
-    sbatch += "#SBATCH --error=%s/logs/%%x_%%j.log\n" % MYDIR
+    sbatch += "#SBATCH --output=%s/%%x_%%j.log\n" % LOG_DIR
+    sbatch += "#SBATCH --error=%s/%%x_%%j.log\n" % LOG_DIR
     sbatch += "#SBATCH --partition=long\n"
     sbatch += "#SBATCH --exclusive\n"
     ##############
@@ -268,13 +274,16 @@ def make_sbatch_koios(job):
     ##############
     sbatch += "\n# preparation\n"
     sbatch += "export OMP_NUM_THREADS=32\n"
-    sbatch += "module add singularity/2.6.1\n"
+    sbatch += "\n# input/output\n"
+    sbatch += "OUT_DIR='%s'\n" % OUT_DIR
+    sbatch += "SINGULARITY_IMG='%s'\n" % SINGULARITY_IMG
+    sbatch += "INPUT_CFG='%s'\n" % INPUT_CFG
     sbatch += "\n# parameters\n"
     for key, value in job.sim_opt.items():
         sbatch += "%s='%s'\n" % (key.upper(), value)
-    sbatch += "GENERIC='-c /data/input/generic_input.cfg --out_dir=/data/output/'\n"
+    sbatch += 'GENERIC="-c $INPUT_CFG --out_dir=$OUT_DIR"\n'
     sbatch += "\n# run\n"
-    sbatch += "singularity exec -B %s:/data fastsim.simg FastSim $GENERIC" % MYDIR
+    sbatch += "singularity exec $SINGULARITY_IMG FastSim $GENERIC"
     for key in job.sim_opt.keys():
         sbatch += " $%s" % key.upper()
     return sbatch + "\n"
@@ -288,7 +297,7 @@ def make_job_scripts(job, app):
     sbatch_koios = make_sbatch_koios(job)
 
     # save_job_file(qsub_meta, "Metacentrum/%s_qsub.pbs" % app)
-    save_job_file(sbatch_koios, "%s/%s_sbatch.sh" % (scr_dir, app))
+    save_job_file(sbatch_koios, "%s/%s_sbatch.sh" % (SCRIPT_DIR, app))
 
 
 def make_submit(job_files, cmd='sbatch'):
@@ -305,7 +314,7 @@ def make_submit(job_files, cmd='sbatch'):
     submit += "done\n"
     return submit
 
-def create_mlt_submit(job_files, sh_file="%s/mlt_CHI.sh" % scr_dir, cmd='sbatch'):
+def create_mlt_submit(job_files, sh_file="%s/mlt_CHI.sh" % SCRIPT_DIR, cmd='sbatch'):
     # create bash file
     submit = make_submit(job_files, cmd=cmd)
     save_job_file(submit, sh_file)
@@ -453,7 +462,7 @@ def qsub_CHI_mlt(sim_param):
     for i in range(Nchi):
         app = 'CHI_%i' % i
         qsub_CHI(sim_param, app=app, with_chi=True)
-        job_files.append("%s/%s_sbatch.sh" % (scr_dir, app))
+        job_files.append("%s/%s_sbatch.sh" % (SCRIPT_DIR, app))
 
     create_mlt_submit(job_files)
 
@@ -467,10 +476,10 @@ def qsub_json(data):
                 sim_param = get_param_from_json(param, default=default, with_chi=(app=='CHI'))
                 name = "%s_%i" % (app, i)
                 qsub_fce(sim_param, app=name)
-                job_files.append("%s/%s_sbatch.sh" % (scr_dir, name))
+                job_files.append("%s/%s_sbatch.sh" % (SCRIPT_DIR, name))
         except AttributeError:
             print("Wrong format of json file!")
-    create_mlt_submit(job_files, sh_file="%s/all_runs.sh" % scr_dir)
+    create_mlt_submit(job_files, sh_file="%s/all_runs.sh" % SCRIPT_DIR)
 
 
 if __name__ == "__main__":
