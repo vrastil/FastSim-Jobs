@@ -8,3 +8,4 @@ batch_scripts/
 
 # ignore containers
 *.simg
+*.sif
