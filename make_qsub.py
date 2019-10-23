@@ -21,7 +21,7 @@ SCRIPT_DIR = ROOT + "jobs/batch_scripts/"
 OUT_DIR = ROOT + "jobs/output/"
 LOG_DIR = ROOT + "jobs/logs/"
 INPUT_CFG = ROOT + "jobs/input/generic_input.cfg"
-SINGULARITY_IMG = ROOT + "singularity/FastSim.sif"
+SINGULARITY_IMG = ROOT + "jobs/FastSim.sif"
 
 class Job_Param(object):
     def __init__(self, app, mem, cpus, n_cpus):
@@ -135,6 +135,7 @@ def get_chi_input(sim_param):
     sim_param.chi_phi = float(input("Enter value of screening potential (CHI): "))
     sim_param.chi_n = float(input("Enter value chameleon power-law potential exponent (CHI): "))
     sim_param.comp_chi_lin = bool(input("Run linear solver of chameleon? "))
+    sim_param.chi_type = int(input("Which type of approximation is to be used for chamaleon?\n\tFrozen-potential (0)\n\tFrozen-flow (1)\n "))
 
 def get_input(sim_param=None, with_chi=False):
     """ Create simulation parameters. If given already created sim_param, get only chameleon input. """
@@ -166,6 +167,7 @@ def get_param_from_json(data, default=None, with_chi=False):
         sim_param.chi_phi = chi["phi"]
         sim_param.chi_n = chi["n"]
         sim_param.comp_chi_lin = chi["lin"]
+        sim_param.chi_type = chi["type"]
     return sim_param
 
 def cpu_base(sim_param, prep_Nm=1, prep_Np=1, integ_np_nsteps=1, print_np=1, print_NM=1):
@@ -444,7 +446,10 @@ def qsub_CHI_base(sim_param, with_chi=True):
     # creat chameleon job
     CHI = Job_Param('CHI', mem, cpus, n_cpus)
     CHI.add_std_opt(sim_param)
-    CHI.add_sim_opt("--comp_chi 1 ", "app")
+    if sim_param.chi_type == 0:
+        CHI.add_sim_opt("--comp_chi 1 ", "app")
+    elif sim_param.chi_type == 1:
+        CHI.add_sim_opt("--comp_chi_ff 1 ", "app")
     CHI.add_sim_opt("--chi_n %f " % sim_param.chi_n, "app")
     CHI.add_sim_opt("--chi_phi %E " % sim_param.chi_phi, "app")
     CHI.add_sim_opt("--comp_chi_lin %i " % sim_param.comp_chi_lin, "app")
